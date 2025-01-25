@@ -1,0 +1,52 @@
+.editor-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-size: 12px;
+  // opacity: 0.4;
+  .editor-header {
+    height: 50px;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .editor-content {
+    display: flex;
+    flex-grow: 1;
+    overflow: hidden;
+    .left-bar {
+      display: flex;
+      flex-direction: column;
+      width: 46px;
+      flex-shrink: 0;
+      border-right: 1px solid #ddd;
+      font-size: 12px;
+    }
+    .center-content {
+      display: flex;
+      flex-direction: column;
+      flex-grow: 1;
+      overflow: hidden;
+      .main-content {
+        height: 100%;
+      }
+    }
+    .right-bar {
+      display: flex;
+      width: 50px;
+      flex-shrink: 0;
+      border-left: 1px solid #ddd;
+      font-size: 12px;
+    }
+  }
+}
+
+.editor-container {
+  .insert-child-action {
+    opacity: 0.8;
+    &:hover {
+      opacity: 1;
+    }
+  }
+}

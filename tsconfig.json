@@ -1,0 +1,28 @@
+{
+  "extends": "@modern-js/tsconfig/base",
+  "compilerOptions": {
+    "declaration": false,
+    "jsx": "preserve",
+    "baseUrl": "./",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@shared/*": ["./shared/*"]
+    },
+    "noImplicitAny": false,
+    "target": "es5",
+    "lib": ["es6", "dom"],
+    "types": ["reflect-metadata"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "strictPropertyInitialization": false
+  },
+  "include": [
+    "src",
+    "shared",
+    "config",
+    "modern.config.ts",
+  ],
+  "exclude": ["node_modules", "dist", "es", "umd"]
+}
