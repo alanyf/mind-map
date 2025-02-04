@@ -7,6 +7,7 @@
     "build": "modern build",
     "analyze": "npx modern build --analyze",
     "start": "modern start",
+    "server": "export OLLAMA_ORIGINS=*; node ./server/ollama-server.js",
     "new": "modern new",
     "deploy": "node deploy.js",
     "lint": "modern lint"
@@ -43,6 +44,8 @@
     "dagre": "^0.8.5",
     "jsonrepair": "^3.11.2",
     "lodash": "^4.17.21",
+    "markdown-it": "^14.1.0",
+    "react-markdown": "^6.0.3",
     "moment": "^2.29.4",
     "react": "^17.0.1",
     "react-dom": "^17.0.1",

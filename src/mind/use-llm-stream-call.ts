@@ -7,16 +7,20 @@ export enum RespondingStatus {
 }
 
 const generateTextQuery = (
-  url: string,
+  params: { url: string; method?: 'POST' | 'GET'; body?: string },
   onChange: (generatedText: string) => void,
   onFinish?: () => void,
 ): { abort: () => void } => {
   const controller = new AbortController();
   const { signal } = controller;
-
+  const { url, method = 'GET', body = '' } = params;
   fetch(`${url}`, {
-    method: 'GET',
+    method,
+    body,
     signal,
+    headers: {
+      'Content-Type': 'application/json',
+    },
   })
     .then(response => {
       if (!response.body) {
@@ -79,7 +83,7 @@ export interface LLMStream {
    * start 方法，它接受一个字符串参数 text，用于开始流操作。
    * @param text - 要处理的文本
    */
-  start: (params: { url: string }) => void;
+  start: (params: { url: string; method?: 'POST' | 'GET'; body?: string; responseTransform?: (data: string) => string }) => void;
 
   /**
    * respondingStatus 属性，它是一个枚举类型或其他格式，用于指示流的响应状态
@@ -104,13 +108,13 @@ export const useLLMStreamCall = (): LLMStream => {
     respondingStatus,
     smoothExecuteResult,
     start: params => {
-      const { url } = params;
+      const { responseTransform } = params;
       setRespondingStatus(RespondingStatus.Starting);
       setSmoothExecuteResult('');
       const { abort } = generateTextQuery(
-        url,
+        params,
         generatedText => {
-          setSmoothExecuteResult((oldText: string) => oldText + generatedText);
+          setSmoothExecuteResult((oldText: string) => oldText + (responseTransform ? responseTransform(generatedText) : generatedText));
         },
         () => {
           setRespondingStatus(RespondingStatus.End);

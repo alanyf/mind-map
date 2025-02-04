@@ -3,11 +3,65 @@ import { Edge, Node, useReactFlow } from '@xyflow/react';
 import { Button, Popover, Input, Divider, Row, Checkbox } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { jsonrepair } from 'jsonrepair';
-import { cloneDeep, throttle, uniqueId } from 'lodash';
+import { chunk, cloneDeep, throttle, uniqueId } from 'lodash';
 import { graphToSimpleTree, treeToGraph } from '../utils';
 import { useEditor } from '../use-editor';
 import { RespondingStatus, useLLMStreamCall } from '../use-llm-stream-call';
 import { SimpleTreeNode } from '../types';
+import { ChatMessages } from '@/components/message-bubble';
+import { mockAIRes } from './mock';
+
+const modalName = 'gemma2:2b'; // 'deepseek-r1:1.5b'
+
+const responseTransform = (chunk: string) => {
+  try {
+    const res = JSON.parse(chunk.toString());
+    return res?.response ?? '';
+  } catch (e) {
+    return '';
+  }
+}
+
+const systemPrompt = `
+# 角色:
+你是一名思维导图数据生成器。
+
+## 目标:
+- 生成结构化的思维导图数据。
+- 确保数据遵循给定的格式和类型要求。
+
+## 技能:
+- 理解和应用数据结构知识。
+- 能够根据用户需求生成具体的数据节点。
+
+## 工作流程:
+1. 解析用户输入的思维导图主题和子节点信息。
+2. 根据解析结果，构建符合 \`MindNode\` 接口的数据结构。
+3. 确保每个节点正确地链接其子节点，并验证数据的完整性和准确性。
+4. 输出最终的 JSON 格式的思维导图数据。
+
+## 输出格式:
+输出应为 JSON 格式，遵循 \`MindNode\` 接口定义，包括节点的标签（label）和可选的子节点（children）列表。样式应保持清晰和专业。
+\`\`\`ts
+// MindNode 接口定义
+interface MindNode {
+  label: string;
+  children?: MindNode[];
+}
+\`\`\`
+
+## 约束:
+- 必须使用 JSON 格式输出思维导图数据。
+- 所有节点必须严格符合 \`MindNode\` 接口定义。
+- 仅返回 JSON 数据，无需额外的解释或说明。
+
+## 示例:
+输入（用户的要求）：生成高中理科科目思维导图
+输出(返回输出内容)：
+\`\`\`json
+{"label":"初中科目","children":[{"label":"数学"},{"label":"语文"},{"label":"英语"},{"label":"物理"},{"label":"化学"}}
+\`\`\`
+`
 
 function resetChildrenNodeId(tree: SimpleTreeNode) {
   const dfs = (node: SimpleTreeNode) => {
@@ -83,13 +137,19 @@ export function ExpandNodeChildren() {
     backupDataRef.current = cloneDeep(data);
     const jsonData = JSON.stringify(graphToSimpleTree(data.nodes, data.edges));
     const userQueryStr = userQuery ? `\n\n要求: ${userQuery}\n` : '';
-    const query = `
-      请根据整体思维导图的数据，扩写节点${selectedNodeRef.current.id}的子节点。
-      直接生成一个以节点${selectedNodeRef.current.id}为根节点的独立思维导图。
+    const query = `${systemPrompt}
+      要求：请根据整体思维导图的数据，扩写节点id=${selectedNodeRef.current.id}的子节点。
+      直接生成一个以节点id=${selectedNodeRef.current.id}为根节点的独立思维导图。
       ${userQueryStr}
       \`\`\`json${jsonData}\n\`\`\``;
     start({
-      url: `http://localhost:3000/api/fe-plugin/mind-map-gen-stream?query=${query}`,
+      url: `http://localhost:11434/api/generate`,
+      method: 'POST',
+      body: JSON.stringify({
+        prompt: query,
+        model: modalName,
+      }),
+      responseTransform,
     });
   };
 
@@ -189,9 +249,15 @@ export function AIPanel() {
       : `\n\n根据如下数据修改: \`\`\`json
     ${JSON.stringify(treeData)}
     \`\`\``;
-    const queryStr = `${query}${contextData}`;
+    const queryStr = `${systemPrompt}\n\n${query}${contextData}`;
     start({
-      url: `http://localhost:3000/api/fe-plugin/mind-map-gen-stream?query=${queryStr}`,
+      url: `http://localhost:11434/api/generate`,
+      method: 'POST',
+      body: JSON.stringify({
+        prompt: queryStr,
+        model: modalName,
+      }),
+      responseTransform,
     });
   };
 
@@ -218,7 +284,7 @@ export function AIPanel() {
     <Popover
       trigger="click"
       content={
-        <div style={{ width: 400 }}>
+        <div style={{ width: 600 }}>
           <Row style={{ display: 'flex', gap: 12 }}>
             <Button size="small" loading={loading} onClick={handleGenerate}>
               开始生成
@@ -233,11 +299,30 @@ export function AIPanel() {
               重新生成
             </Checkbox>
           </Row>
-          <Divider />
+          <div style={{ maxHeight: 500,
+            overflowY: 'auto',
+            border: '1px solid #f0f0f0',
+            borderRadius: 4,
+            padding: 8,
+            marginBottom: 8,
+           }}>
+            <ChatMessages
+              messages={[
+                {
+                  role: 'user',
+                  content: query,
+                },
+                {
+                  role: 'assistant',
+                  content: smoothExecuteResult,
+                },
+              ]}
+            />
+          </div>
           <Input.TextArea
             value={query}
             onChange={e => setQuery(e.target.value)}
-            style={{ minHeight: 200 }}
+            style={{ minHeight: 100 }}
           />
         </div>
       }
