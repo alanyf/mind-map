@@ -11,7 +11,7 @@ import { SimpleTreeNode } from '../types';
 import { ChatMessages } from '@/components/message-bubble';
 import { mockAIRes } from './mock';
 
-const modalName = 'gemma2:2b'; // 'deepseek-r1:1.5b'
+const modalName = 'gemma2:2b'; // 'gemma2:2b' 'deepseek-r1:1.5b'
 
 const responseTransform = (chunk: string) => {
   try {
@@ -22,44 +22,28 @@ const responseTransform = (chunk: string) => {
   }
 }
 
-const systemPrompt = `
+const getSystemPrompt = ({ beauty = false }: { beauty?: boolean }) => `
 # 角色:
-你是一名思维导图数据生成器。
+你是一名思维导图数据生成器。能够根据用户输入的需求生成符合格式要求的思维导图json数据。
 
-## 目标:
-- 生成结构化的思维导图数据。
-- 确保数据遵循给定的格式和类型要求。
+## 输出格式约束:
+1. 输出格式非常重要, 请务必保证输出格式为合法的单个根节点树状JSON对象数据格式, 所有节点数据都在一棵树内, 每个节点都必须遵循如下 MindNode 接口定义。
+2. 无需包含额外的注释或说明, 只需要输出JSON数据${beauty ? ', json数据需要空格格式化' : ', json数据不需要空格格式化, 直接在一行输出即可'}。
 
-## 技能:
-- 理解和应用数据结构知识。
-- 能够根据用户需求生成具体的数据节点。
-
-## 工作流程:
-1. 解析用户输入的思维导图主题和子节点信息。
-2. 根据解析结果，构建符合 \`MindNode\` 接口的数据结构。
-3. 确保每个节点正确地链接其子节点，并验证数据的完整性和准确性。
-4. 输出最终的 JSON 格式的思维导图数据。
-
-## 输出格式:
-输出应为 JSON 格式，遵循 \`MindNode\` 接口定义，包括节点的标签（label）和可选的子节点（children）列表。样式应保持清晰和专业。
-\`\`\`ts
-// MindNode 接口定义
+\`\`\`typescript
 interface MindNode {
-  label: string;
+  // 节点的名字，必须有
+  label: string; 
+  // 可选的子节点列表, 若没有子节点则不需要children字段
   children?: MindNode[];
 }
 \`\`\`
 
-## 约束:
-- 必须使用 JSON 格式输出思维导图数据。
-- 所有节点必须严格符合 \`MindNode\` 接口定义。
-- 仅返回 JSON 数据，无需额外的解释或说明。
-
 ## 示例:
-输入（用户的要求）：生成高中理科科目思维导图
-输出(返回输出内容)：
+用户输入：生成高中理科科目思维导图
+你的输出：
 \`\`\`json
-{"label":"初中科目","children":[{"label":"数学"},{"label":"语文"},{"label":"英语"},{"label":"物理"},{"label":"化学"}}
+${JSON.stringify({"label":"高中科目","children":[{"label":"数学"},{"label":"语文"},{"label":"英语"},{"label":"物理"},{"label":"化学"},{"label":"生物"}]}, null, beauty ? 2 : undefined)}
 \`\`\`
 `
 
@@ -106,7 +90,9 @@ export function ExpandNodeChildren() {
     try {
       const jsonStr = jsonrepair(str);
       const treeData = resetChildrenNodeId(JSON.parse(jsonStr));
+      treeData.id = selectedNodeRef.current?.id ?? '';
       console.log('treeData', treeData);
+
       const graphData = treeToGraph(treeData);
       const rootID = selectedNodeRef.current?.id;
       graphData.nodes = graphData.nodes.filter(e => e.id !== rootID);
@@ -137,7 +123,7 @@ export function ExpandNodeChildren() {
     backupDataRef.current = cloneDeep(data);
     const jsonData = JSON.stringify(graphToSimpleTree(data.nodes, data.edges));
     const userQueryStr = userQuery ? `\n\n要求: ${userQuery}\n` : '';
-    const query = `${systemPrompt}
+    const query = `${getSystemPrompt({ beauty: true })}
       要求：请根据整体思维导图的数据，扩写节点id=${selectedNodeRef.current.id}的子节点。
       直接生成一个以节点id=${selectedNodeRef.current.id}为根节点的独立思维导图。
       ${userQueryStr}
@@ -249,19 +235,24 @@ export function AIPanel() {
       : `\n\n根据如下数据修改: \`\`\`json
     ${JSON.stringify(treeData)}
     \`\`\``;
-    const queryStr = `${systemPrompt}\n\n${query}${contextData}`;
+    const queryStr = `${getSystemPrompt({ beauty: true })}\n\n${query}${contextData}`;
     start({
       url: `http://localhost:11434/api/generate`,
       method: 'POST',
       body: JSON.stringify({
         prompt: queryStr,
         model: modalName,
+        options: {
+          temperature: 0.1,
+          top_p: 0.9,
+        },
       }),
       responseTransform,
     });
   };
 
   useEffect(() => {
+    console.log(smoothExecuteResult)
     const json = getJsonDataFromMarkdown(smoothExecuteResult);
     if (!json?.trim()) {
       console.log('json内容为空', smoothExecuteResult);

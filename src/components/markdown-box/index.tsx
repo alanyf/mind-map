@@ -9,7 +9,6 @@ const md = markdownIt({ html: true, breaks: true });
 export const MarkdownBox = ({ markdown }: { markdown: string }) => {
   const html = useMemo(() => md.render(markdown.replace('</think>', '\n\n</think>\n')), [markdown]);
 
-  console.log(html);
   return (
     <Typography className="markdown-box-container">
       
