@@ -1,5 +1,5 @@
 import { EditorPanel } from '../types';
-import { AIPanel, ExpandNodeChildren } from './ai-generate';
+import { AIPanel } from './ai-generate';
 import { EdgeStylePanel } from './edge-style-panel';
 import { ImportPanel } from './import-export';
 import { LayoutPanel } from './layout-panel';
@@ -12,7 +12,6 @@ export const panels: EditorPanel[] = [
     content: (
       <div style={{ display: 'flex', gap: 12 }}>
         <AIPanel />
-        <ExpandNodeChildren />
         <ImportPanel />
         <ColorThemePanel />
         <SavePanel />

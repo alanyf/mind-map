@@ -1,17 +1,19 @@
 /* eslint-disable no-console */
 import { Edge, Node, useReactFlow } from '@xyflow/react';
-import { Button, Popover, Input, Divider, Row, Checkbox } from 'antd';
+import { Button, Input, Row, Checkbox, Drawer, Tooltip } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { jsonrepair } from 'jsonrepair';
-import { chunk, cloneDeep, throttle, uniqueId } from 'lodash';
+import { cloneDeep, throttle, uniqueId } from 'lodash';
 import { graphToSimpleTree, treeToGraph } from '../utils';
 import { useEditor } from '../use-editor';
 import { RespondingStatus, useLLMStreamCall } from '../use-llm-stream-call';
 import { SimpleTreeNode } from '../types';
 import { ChatMessages } from '@/components/message-bubble';
-import { mockAIRes } from './mock';
+import { InfoCircleFilled } from '@ant-design/icons';
 
-const modalName = 'gemma2:2b'; // 'gemma2:2b' 'deepseek-r1:1.5b'
+const defaultModalName = 'gemma2:2b'; // 'gemma2:2b' 'deepseek-r1:1.5b' 'deepseek-coder:1.3b'
+
+const tips = `使用说明: 这里的模型名称来自于本地Ollama部署的模型名称, 请在Ollama中部署好模型后再使用。安装方法可参考：https://ollama.com`;
 
 const responseTransform = (chunk: string) => {
   try {
@@ -72,14 +74,19 @@ function getJsonDataFromMarkdown(markdown: string) {
 
 const example = `生成一个语数英理化生简单科目的思维导图(共10个节点以内)`;
 
-export function ExpandNodeChildren() {
+export function AIPanel() {
   const flow = useReactFlow();
   const { fitView } = flow;
-  const { layout, selection, setData, computeLayout, updateLayout } =
-    useEditor();
-  const [userQuery, setUserQuery] = useState('');
-  const { smoothExecuteResult, start, abort, respondingStatus } =
-    useLLMStreamCall();
+  const { layout, selection, setData, computeLayout } = useEditor();
+  const [visible, setVisible] = useState(false);
+  const [query, setQuery] = useState(example);
+  const [regenerate, setRegenerate] = useState(true);
+  const [mode, setMode] = useState<'generate' | 'expend'>('generate');
+  const [modelName, setModelName] = useState('deepseek-r1:1.5b');
+  // const { smoothExecuteResult, start, abort, respondingStatus } =
+  //   useLLMStreamCall();
+  const aiLLMCall = useLLMStreamCall();
+  const expendLLMCall = useLLMStreamCall();
   const backupDataRef = useRef<{ nodes: Node[]; edges: Edge[] }>({
     nodes: [],
     edges: [],
@@ -87,6 +94,27 @@ export function ExpandNodeChildren() {
   const selectedNodeRef = useRef<Node | undefined>();
 
   const render = throttle(str => {
+    try {
+      const jsonStr = jsonrepair(str);
+      const treeData = resetChildrenNodeId(JSON.parse(jsonStr));
+      const graphData = treeToGraph(treeData);
+      const layoutGraph = computeLayout(
+        layout,
+        graphData.nodes,
+        graphData.edges,
+      );
+      setData(layoutGraph.nodes, layoutGraph.edges);
+      window.requestAnimationFrame(() => {
+        fitView();
+      });
+    } catch (e) {
+      console.error(e);
+      console.log(str);
+    }
+  }, 200);
+
+
+  const renderExpend = throttle(str => {
     try {
       const jsonStr = jsonrepair(str);
       const treeData = resetChildrenNodeId(JSON.parse(jsonStr));
@@ -111,122 +139,6 @@ export function ExpandNodeChildren() {
     }
   }, 200);
 
-  const handleGenerate = () => {
-    selectedNodeRef.current = selection.nodes[0];
-    if (!selectedNodeRef.current) {
-      return;
-    }
-    const data = {
-      nodes: flow.getNodes(),
-      edges: flow.getEdges(),
-    };
-    backupDataRef.current = cloneDeep(data);
-    const jsonData = JSON.stringify(graphToSimpleTree(data.nodes, data.edges));
-    const userQueryStr = userQuery ? `\n\n要求: ${userQuery}\n` : '';
-    const query = `${getSystemPrompt({ beauty: true })}
-      要求：请根据整体思维导图的数据，扩写节点id=${selectedNodeRef.current.id}的子节点。
-      直接生成一个以节点id=${selectedNodeRef.current.id}为根节点的独立思维导图。
-      ${userQueryStr}
-      \`\`\`json${jsonData}\n\`\`\``;
-    start({
-      url: `http://localhost:11434/api/generate`,
-      method: 'POST',
-      body: JSON.stringify({
-        prompt: query,
-        model: modalName,
-      }),
-      responseTransform,
-    });
-  };
-
-  useEffect(() => {
-    const json = getJsonDataFromMarkdown(smoothExecuteResult);
-    if (!json?.trim()) {
-      console.log('json内容为空', smoothExecuteResult);
-      return;
-    }
-    render(json);
-  }, [smoothExecuteResult]);
-
-  useEffect(() => {
-    if (respondingStatus === RespondingStatus.End) {
-      console.log('yf123 result', smoothExecuteResult);
-      setTimeout(() => {
-        updateLayout();
-        window.requestAnimationFrame(() => {
-          fitView();
-        });
-      }, 200);
-    }
-  }, [RespondingStatus, smoothExecuteResult]);
-  const loading = respondingStatus === RespondingStatus.Starting;
-
-  return (
-    <Popover
-      trigger="click"
-      content={
-        <div style={{ width: 400 }}>
-          选中一个节点点击扩写
-          <Row>
-            <Button
-              disabled={selection.nodes.length !== 1}
-              size="small"
-              loading={loading}
-              onClick={handleGenerate}
-            >
-              扩写
-            </Button>
-            <Button
-              disabled={!loading}
-              size="small"
-              style={{ marginLeft: 8 }}
-              onClick={() => abort()}
-            >
-              停止
-            </Button>
-          </Row>
-          <Divider />
-          <Input.TextArea
-            value={userQuery}
-            onChange={e => setUserQuery(e.target.value)}
-            style={{ minHeight: 200 }}
-          />
-        </div>
-      }
-    >
-      <Button size="small">AI扩写</Button>
-    </Popover>
-  );
-}
-
-export function AIPanel() {
-  const flow = useReactFlow();
-  const { fitView } = flow;
-  const { layout, setData, computeLayout } = useEditor();
-  const [query, setQuery] = useState(example);
-  const [regenerate, setRegenerate] = useState(true);
-  const { smoothExecuteResult, start, abort, respondingStatus } =
-    useLLMStreamCall();
-
-  const render = throttle(str => {
-    try {
-      const jsonStr = jsonrepair(str);
-      const treeData = resetChildrenNodeId(JSON.parse(jsonStr));
-      const graphData = treeToGraph(treeData);
-      const layoutGraph = computeLayout(
-        layout,
-        graphData.nodes,
-        graphData.edges,
-      );
-      setData(layoutGraph.nodes, layoutGraph.edges);
-      window.requestAnimationFrame(() => {
-        fitView();
-      });
-    } catch (e) {
-      console.error(e);
-      console.log(str);
-    }
-  }, 200);
 
   const handleGenerate = () => {
     const treeData = graphToSimpleTree(flow.getNodes(), flow.getEdges());
@@ -235,13 +147,14 @@ export function AIPanel() {
       : `\n\n根据如下数据修改: \`\`\`json
     ${JSON.stringify(treeData)}
     \`\`\``;
+    setMode('generate');
     const queryStr = `${getSystemPrompt({ beauty: true })}\n\n${query}${contextData}`;
-    start({
+    aiLLMCall.start({
       url: `http://localhost:11434/api/generate`,
       method: 'POST',
       body: JSON.stringify({
         prompt: queryStr,
-        model: modalName,
+        model: modelName,
         options: {
           temperature: 0.1,
           top_p: 0.9,
@@ -251,52 +164,111 @@ export function AIPanel() {
     });
   };
 
+  const handleExpandChild = () => {
+    selectedNodeRef.current = selection.nodes[0];
+    if (!selectedNodeRef.current) {
+      return;
+    }
+    setMode('expend');
+    const data = {
+      nodes: flow.getNodes(),
+      edges: flow.getEdges(),
+    };
+    backupDataRef.current = cloneDeep(data);
+    const jsonData = JSON.stringify(graphToSimpleTree(data.nodes, data.edges));
+    const userQueryStr = query ? `\n\n要求: ${query}\n` : '';
+    const queryStr = `${getSystemPrompt({ beauty: true })}
+      要求：请根据整体思维导图的数据，扩写节点id=${selectedNodeRef.current.id}的子节点。
+      直接生成一个以节点id=${selectedNodeRef.current.id}为根节点的独立思维导图。
+      ${userQueryStr}
+      \`\`\`json${jsonData}\n\`\`\``;
+      expendLLMCall.start({
+      url: `http://localhost:11434/api/generate`,
+      method: 'POST',
+      body: JSON.stringify({
+        prompt: queryStr,
+        model: modelName,
+      }),
+      responseTransform,
+    });
+  };
+
   useEffect(() => {
-    console.log(smoothExecuteResult)
-    const json = getJsonDataFromMarkdown(smoothExecuteResult);
+    const json = getJsonDataFromMarkdown(aiLLMCall.smoothExecuteResult);
     if (!json?.trim()) {
-      console.log('json内容为空', smoothExecuteResult);
+      console.log('json内容为空', aiLLMCall.smoothExecuteResult);
       return;
     }
     render(json);
-  }, [smoothExecuteResult]);
+  }, [aiLLMCall.smoothExecuteResult]);
 
   useEffect(() => {
-    if (respondingStatus === RespondingStatus.End) {
-      console.log('yf123 result', smoothExecuteResult);
+    const json = getJsonDataFromMarkdown(expendLLMCall.smoothExecuteResult);
+    if (!json?.trim()) {
+      console.log('json内容为空', expendLLMCall.smoothExecuteResult);
+      return;
+    }
+    renderExpend(json);
+  }, [expendLLMCall.smoothExecuteResult]);
+
+  useEffect(() => {
+    if (aiLLMCall.respondingStatus === RespondingStatus.End) {
       setTimeout(() => {
         fitView();
       }, 200);
     }
-  }, [RespondingStatus, smoothExecuteResult]);
-  const loading = respondingStatus === RespondingStatus.Starting;
-
+  }, [aiLLMCall.smoothExecuteResult]);
   return (
-    <Popover
-      trigger="click"
-      content={
-        <div style={{ width: 600 }}>
+    <>
+      <Button size='small' onClick={() => setVisible(true)}>AI</Button>
+      <Drawer
+        title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          AI生成 
+          <Tooltip title={tips}><InfoCircleFilled style={{ fontSize: 12, color: '#999' }} /></Tooltip>
+        </div>}
+        width={500}
+        visible={visible}
+        mask={false}
+        onClose={() => setVisible(false)}
+        bodyStyle={{ padding: 12 }}>
+        <div style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Row style={{ display: 'flex', gap: 12 }}>
-            <Button size="small" loading={loading} onClick={handleGenerate}>
-              开始生成
+            <Button
+              size="small"
+              disabled={expendLLMCall.respondingStatus === RespondingStatus.Starting}
+              loading={aiLLMCall.respondingStatus === RespondingStatus.Starting}
+              onClick={handleGenerate}>
+              生成
             </Button>
-            <Button size="small" onClick={() => abort()}>
+            <Button
+              size="small"
+              disabled={aiLLMCall.respondingStatus === RespondingStatus.Starting || selection.nodes.length !== 1}
+              loading={expendLLMCall.respondingStatus === RespondingStatus.Starting}
+              onClick={() => handleExpandChild()}>
+              扩写
+            </Button>
+            <Button size="small" onClick={() => {
+              aiLLMCall.abort();
+              expendLLMCall.abort();
+            }}>
               停止
             </Button>
-            <Checkbox
+            {/* <Checkbox
               checked={regenerate}
               onChange={e => setRegenerate(e.target.checked)}
             >
               重新生成
-            </Checkbox>
+            </Checkbox> */}
+            <Input style={{ width: 180 }} size="small" value={modelName} onChange={e => setModelName(e.target.value)} />
           </Row>
-          <div style={{ maxHeight: 500,
+          <div style={{
             overflowY: 'auto',
             border: '1px solid #f0f0f0',
             borderRadius: 4,
             padding: 8,
-            marginBottom: 8,
-           }}>
+            flexGrow: 1,
+            fontSize: 13,
+          }}>
             <ChatMessages
               messages={[
                 {
@@ -305,7 +277,7 @@ export function AIPanel() {
                 },
                 {
                   role: 'assistant',
-                  content: smoothExecuteResult,
+                  content: mode === 'generate' ? aiLLMCall.smoothExecuteResult : expendLLMCall.smoothExecuteResult,
                 },
               ]}
             />
@@ -316,9 +288,7 @@ export function AIPanel() {
             style={{ minHeight: 100 }}
           />
         </div>
-      }
-    >
-      <Button size="small">AI</Button>
-    </Popover>
+      </Drawer>
+    </>
   );
 }

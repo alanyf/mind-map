@@ -70,7 +70,6 @@ export function ChatMessages({
 }: { messages: { role: string; content: string }[] }) {
   return (
     <div style={{
-      // gap: 12,
       overflow: 'hidden',
       width: '100%',
     }}>

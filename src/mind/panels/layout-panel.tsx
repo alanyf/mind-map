@@ -28,7 +28,7 @@ export function LayoutPanel() {
       >
         自动布局
       </Button>
-      <Button onClick={() => reactFlow.zoomTo(1)}>{reactFlow.getZoom()}</Button>
+      <Button size="small" onClick={() => reactFlow.zoomTo(1)}>{reactFlow.getZoom().toFixed(2)}</Button>
     </div>
   );
 }

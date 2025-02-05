@@ -4,7 +4,7 @@ import Canvas from './canvas2';
 export default function () {
   return (
     <div className="editor-container">
-      <div className="editor-header">Header</div>
+      {/* <div className="editor-header">Header</div> */}
       <div className="editor-content">
         {/* <div className="left-bar">Left Bar</div> */}
         <div className="center-content">
@@ -12,6 +12,7 @@ export default function () {
             <Canvas />
           </div>
         </div>
+        {/* <div className="right-bar">Right Bar</div> */}
       </div>
     </div>
   );
