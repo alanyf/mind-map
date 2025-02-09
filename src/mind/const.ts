@@ -1,5 +1,7 @@
 import { Layout, MindDSL } from "./types";
 
+export const NODE_HEIGHT = 28;
+
 export const defaultMindData: MindDSL = {
  layout: Layout.Horizontal,
   nodes: [
@@ -8,21 +10,21 @@ export const defaultMindData: MindDSL = {
       type: 'text_node',
       data: { label: 'Root' },
       position: { x: 0, y: 0 },
-      measured: { width: 50, height: 28 },
+      measured: { width: 50, height: NODE_HEIGHT },
     },
     {
       id: '1',
       type: 'text_node',
       data: { label: 'Node 1' },
       position: { x: 100, y: -50 },
-      measured: { width: 50, height: 28 },
+      measured: { width: 50, height: NODE_HEIGHT },
     },
     {
       id: '2',
       type: 'text_node',
       data: { label: 'Node 2' },
       position: { x: 100, y: 50 },
-      measured: { width: 50, height: 28 },
+      measured: { width: 50, height: NODE_HEIGHT },
     },
   ],
   edges: [

@@ -1,5 +1,5 @@
 import './editor.less';
-import Canvas from './canvas2';
+import Canvas from './canvas';
 
 export default function () {
   return (

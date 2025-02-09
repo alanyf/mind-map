@@ -1,10 +1,8 @@
 import { Radio, Button } from 'antd';
-import { useReactFlow } from '@xyflow/react';
 import { Layout } from '../types';
 import { useEditor } from '../use-editor';
 
 export function LayoutPanel() {
-  const reactFlow = useReactFlow();
   const { layout, setLayout, updateLayout } = useEditor();
   return (
     <div style={{ display: 'flex', gap: 4 }}>
@@ -28,7 +26,6 @@ export function LayoutPanel() {
       >
         自动布局
       </Button>
-      <Button size="small" onClick={() => reactFlow.zoomTo(1)}>{reactFlow.getZoom().toFixed(2)}</Button>
     </div>
   );
 }

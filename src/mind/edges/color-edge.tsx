@@ -13,7 +13,7 @@ import { EdgeTypeEnum, Layout } from '../types';
 export function CustomEdge(props: EdgeProps & { edgeType: EdgeTypeEnum }) {
   const { id, sourceX, sourceY, targetX, targetY, selected, data, edgeType } =
     props;
-  const { layout } = useEditor();
+  const { layout, isNodeHidden } = useEditor();
   const params: GetBezierPathParams = {
     sourceX,
     sourceY,
@@ -32,6 +32,9 @@ export function CustomEdge(props: EdgeProps & { edgeType: EdgeTypeEnum }) {
     edgePath = getBezierPath(params)[0];
   }
 
+  if (isNodeHidden(props.target)) {
+    return null;
+  }
   return (
     <>
       <BaseEdge

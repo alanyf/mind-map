@@ -12,7 +12,7 @@ const colors2: string[] = [
   '#f9633f',
   '#35c290',
   '#7fc0f8',
-  '#e1e1d5',
+  '#ffabaa',
   '#85c1d3',
 ];
 

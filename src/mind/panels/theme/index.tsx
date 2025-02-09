@@ -47,8 +47,13 @@ export function ColorThemePanel() {
         color: '#fff',
         border: 'none',
       });
-      const allChildren = getAllNodeChildren(node.id, edges).concat(node.id);
-      allChildren.forEach(childId => {
+      const allChildren = getAllNodeChildren(node.id, edges);
+      allChildren.forEach((childId) => {
+        updateNodeData(childId, {
+          border: 'none',
+        })
+      });
+      allChildren.concat(node.id).forEach(childId => {
         const edge = edges.find(e => e.target === childId);
         if (edge) {
           updateEdgeData(edge.id, {

@@ -23,6 +23,11 @@ export interface MindDSL {
   edges: Edge[];
 }
 
+export interface GraphData {
+  nodes: Node[];
+  edges: Edge[];
+}
+
 export interface TreeNode {
   id: string;
   type: string;

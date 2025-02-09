@@ -1,10 +1,20 @@
 import { Node, Edge } from '@xyflow/react';
 import Dagre, { GraphLabel } from 'dagre';
-import { Layout, MindDSL, SimpleTreeNode, TreeNode } from './types';
-import { mockGraphData1 } from './mock';
+import { GraphData, Layout, MindDSL, SimpleTreeNode, TreeNode } from './types';
+import { isEqual, pick } from 'lodash';
+import { NODE_HEIGHT } from './const';
 
 export function layoutToDirection(layout: Layout): string {
   return layout === Layout.Vertical ? 'TB' : 'LR';
+}
+
+export function safetyParseJSON(str: string) {
+  try {
+    return JSON.parse(str);
+  } catch (err) {
+    console.error(err);
+    return undefined;
+  }
 }
 
 export function saveMindDSLToLocal(dsl: MindDSL) {
@@ -36,7 +46,7 @@ export const computeGraphLayout = (
     // 排版方向
     rankdir: 'LR',
     // 节点间距
-    nodesep: 20,
+    nodesep: 10,
     // 边间距
     // ranksep: 40,
     // align: 'DR',
@@ -160,7 +170,7 @@ export function treeToGraph(tree: SimpleTreeNode) {
           fontFamily:
             'nunito_for_arco, PingFang SC, Microsoft YaHei, Arial, sans-serif',
         }),
-        height: 28,
+        height: NODE_HEIGHT,
       },
     });
     if (parentId !== null) {
@@ -179,6 +189,9 @@ export function treeToGraph(tree: SimpleTreeNode) {
 export function graphToSimpleTree(
   nodes: Node[],
   edges: Edge[],
+  options?: {
+    saveID?: boolean;
+  },
 ): SimpleTreeNode {
   const root = findGraphRoot(nodes, edges);
   if (!root) {
@@ -196,18 +209,127 @@ export function graphToSimpleTree(
     const childrenEdges = edges.filter(edge => edge.source === nodeId);
     const children = childrenEdges.map(edge => buildSubTree(edge.target));
 
-    const treeNode: SimpleTreeNode = {
+    const treeNode: { id?: string; label: string; children?: SimpleTreeNode[] } = {
       id: node.id,
       label: node.data.label as string,
     };
+    if (options?.saveID === false) {
+      delete treeNode.id;
+    }
     if (children.length > 0) {
       treeNode.children = children;
     }
-    return treeNode;
+    return treeNode as SimpleTreeNode;
   }
 
   // Start building the tree from the root
   return buildSubTree(rootId);
 }
 
-console.log(graphToSimpleTree(mockGraphData1.nodes, mockGraphData1.edges));
+/** 删除节点及其子孙节点 */
+function deleteNode(
+  nodes: Node[],
+  edges: Edge[],
+  nodeIdToDelete: string
+): { nodes: Node[]; edges: Edge[] } {
+  // 创建一个 Set 来存储要删除的节点 ID
+  const nodesToDelete = new Set<string>();
+
+  // 使用深度优先搜索 (DFS) 来标记所有要删除的节点
+  function dfs(nodeId: string) {
+    if (nodesToDelete.has(nodeId)) return;
+    nodesToDelete.add(nodeId);
+    // 查找所有以当前节点为源的边，递归删除目标节点
+    edges.forEach(edge => {
+      if (edge.source === nodeId) {
+        dfs(edge.target);
+      }
+    });
+  }
+
+  // 从要删除的节点开始 DFS
+  dfs(nodeIdToDelete);
+
+  // 过滤节点数组，删除标记的节点
+  const filteredNodes = nodes.filter(node => !nodesToDelete.has(node.id));
+
+  // 过滤边数组，删除与标记节点相关的边
+  const filteredEdges = edges.filter(
+    edge => !nodesToDelete.has(edge.source) && !nodesToDelete.has(edge.target)
+  );
+
+  return { nodes: filteredNodes, edges: filteredEdges };
+}
+
+export function deleteInGraph(graphData: GraphData, deleteGraphData: GraphData ) {
+  let nodeList = [...graphData.nodes];
+  let edgeList = [...graphData.edges];
+  deleteGraphData.nodes.forEach(node => {
+    const res = deleteNode(nodeList, edgeList, node.id);
+    nodeList = res.nodes;
+    edgeList = res.edges;
+  });
+  deleteGraphData.edges.forEach(edge => {
+    const res = deleteNode(nodeList, edgeList, edge.target);
+    nodeList = res.nodes;
+    edgeList = res.edges;
+    edgeList = edgeList.filter(e => e.id !== edge.id);
+  });
+  return {
+    nodes: nodeList,
+    edges: edgeList,
+  } as GraphData;
+}
+
+export function isGraphEqual(graph1: GraphData | undefined, graph2: GraphData | undefined) {
+  // return isEqual(graph1, graph2);
+  if (!graph1 || !graph2) {
+    return false;
+  }
+  const pickNode = (node: Node) => pick(node, 'id', 'data', 'type', 'position', 'measured');
+  const pickEdge = (edge: Edge) => pick(edge, 'id', 'source', 'target');
+  const pickGraph1 = {
+    nodes: graph1.nodes.map(pickNode),
+    edges: graph1.edges.map(pickEdge),
+  };
+  const pickGraph2 = {
+    nodes: graph2.nodes.map(pickNode),
+    edges: graph2.edges.map(pickEdge),
+  };
+  const equal = isEqual(pickGraph1, pickGraph2);
+  return equal;
+}
+/** 计算图中展开和未展开的节点和边 */
+export function computeExpandVisible(graph: GraphData) {
+  const { nodes, edges } = graph;
+  const hiddenNodesMap = new Map<string, boolean>();
+  const childrenMap = new Map<string, string[]>();
+  nodes.forEach(node => childrenMap.set(node.id, []));
+  edges.forEach(edge => childrenMap.get(edge.source)?.push(edge.target));
+  
+  const getNodeAllChildren = (nodeId: string) => {
+    const allChildren: string[] = [];
+    const getNodeChildren = (id: string) => {
+      const children = childrenMap.get(id) ?? [];
+      allChildren.push(...children);
+      children.forEach(getNodeChildren);
+    }
+    getNodeChildren(nodeId);
+    return allChildren;
+  };
+
+  nodes.forEach(node => {
+    if (node?.data?.expanded !== false) {
+      return;
+    }
+    const allChildren = getNodeAllChildren(node.id);
+    allChildren.forEach(childId => hiddenNodesMap.set(childId, true));
+  });
+  return {
+    hiddenNodesMap,
+    expandNodes: nodes.filter(node => !hiddenNodesMap.get(node.id)),
+    unExpandNodes: nodes.filter(node => hiddenNodesMap.get(node.id)),
+    expandEdges: edges.filter(edge => !hiddenNodesMap.get(edge.target)),
+    unExpandEdges: edges.filter(edge => hiddenNodesMap.get(edge.target)),
+  };
+}

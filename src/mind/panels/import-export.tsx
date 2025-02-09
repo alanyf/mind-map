@@ -1,9 +1,11 @@
 import { useReactFlow } from '@xyflow/react';
-import { Button, Popover, Input, Divider, Row } from 'antd';
+import { Button, Popover, Input, Divider, Row, message } from 'antd';
 import { useState } from 'react';
 import { jsonrepair } from 'jsonrepair';
-import { treeToGraph } from '../utils';
+import { graphToSimpleTree, treeToGraph } from '../utils';
 import { useEditor } from '../use-editor';
+import { SimpleTreeNode } from '../types';
+import { examples } from './import-examples';
 
 const example = `{
   "label": "根节点",
@@ -12,6 +14,21 @@ const example = `{
     { "label": "子节点2" }
   ]
 }`;
+function convertTreeToIndentedText(node: SimpleTreeNode, indentSize: number = 4, depth: number = 0): string {
+  // Calculate the indentation based on the depth level and the specified indent size
+  const indentation = ' '.repeat(indentSize * depth);
+  // Start with the current node's label
+  let result = `${indentation}- ${node.label}\n`;
+  
+  // If the node has children, recursively process each child
+  if (node.children) {
+    for (const child of node.children) {
+      result += convertTreeToIndentedText(child, indentSize, depth + 1);
+    }
+  }
+  
+  return result;
+}
 
 export function ImportPanel() {
   const { getEdges, getNodes, fitView } = useReactFlow();
@@ -47,15 +64,42 @@ export function ImportPanel() {
               size="small"
               style={{ marginLeft: 8 }}
               onClick={() => {
+                const graph = { nodes: getNodes(), edges: getEdges() };
+                const tree = graphToSimpleTree(graph.nodes, graph.edges, { saveID: false });
+                const text = convertTreeToIndentedText(tree, 2);
                 // eslint-disable-next-line no-console
-                console.log({
-                  nodes: getNodes(),
-                  edges: getEdges(),
+                console.log(graph, tree);
+                console.log(text);
+                navigator.clipboard.writeText(text).then(() => {
+                  message.success('已经复制到剪切板，并打印到控制台');
+                }).catch(err => {
+                  console.error('Failed to copy text: ', err);
                 });
               }}
             >
-              导出到控制台
+              导出
             </Button>
+          </Row>
+          <Divider />
+          <Row style={{ gap: 8 }}>
+            导入模版：
+            {examples.map(({ name, data: graphData }) => (
+              <Button
+                size="small"
+                key={name}
+                onClick={() => {
+                  setData(graphData.nodes, graphData.edges);
+                  setTimeout(() => {
+                    updateLayout();
+                    setTimeout(() => {
+                      fitView();
+                    }, 200);
+                  }, 200);
+                }}
+              >
+                {name}
+              </Button>
+            ))}
           </Row>
           <Divider />
           <Input.TextArea
@@ -66,7 +110,7 @@ export function ImportPanel() {
         </div>
       }
     >
-      <Button size="small">导入</Button>
+      <Button size="small">导入/导出</Button>
     </Popover>
   );
 }

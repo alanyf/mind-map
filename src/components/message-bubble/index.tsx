@@ -10,12 +10,14 @@ function Bubble({
   messageRender,
   avatar,
   position = 'left',
+  contentStyle = {},
 }: {
   content?: string;
   messageRender?: (content: string) => React.ReactNode;
   avatar?: { icon?: React.ReactNode; src?: string };
   typing?: boolean;
   position?: 'left' | 'right';
+  contentStyle?: React.CSSProperties;
 }){
   const avatarJsx = (
     avatar?.icon ? <div style={{
@@ -41,8 +43,9 @@ function Bubble({
       {avatarJsx}
       <div
         style={{
+          backgroundColor: '#f0f0f0',
+          ...contentStyle,
           padding: '4px 8px',
-          background: '#f0f0f0',
           borderRadius: 8,
           overflow: 'hidden',
         }}
@@ -61,13 +64,20 @@ export function MessageBubble({ role, content }: { role?: string; content: strin
       messageRender={renderMarkdown}
       avatar={{ icon: role === 'assistant' ? <OpenAIOutlined /> : <UserOutlined /> }}
       position={role === 'assistant' ? 'left' : 'right'}
+      contentStyle={{
+        backgroundColor: role === 'assistant' ? '#f0f0f0' : '#e9f4fe',
+      }}
     />
   );
 };
 
+export interface Message {
+  role: string;
+  content: string;
+}
 export function ChatMessages({
   messages = []
-}: { messages: { role: string; content: string }[] }) {
+}: { messages: Message[] }) {
   return (
     <div style={{
       overflow: 'hidden',
@@ -79,7 +89,7 @@ export function ChatMessages({
             role={message.role}
             content={message.content}
           />
-          <div style={{ height: 8 }} />
+          <div style={{ height: 12 }} />
         </React.Fragment>
       ))}
     </div>
