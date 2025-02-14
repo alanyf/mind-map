@@ -1,5 +1,4 @@
 import { EditorPanel } from '../types';
-import { AIPanel } from './ai-generate';
 import { EdgeStylePanel } from './edge-style-panel';
 import { HistoryPanel } from './history-panel';
 import { ImportPanel } from './import-export';
@@ -13,13 +12,19 @@ export const panels: EditorPanel[] = [
     content: (
       <div style={{ display: 'flex', gap: 12 }}>
         <HistoryPanel />
-        <AIPanel />
         <ImportPanel />
-        <ColorThemePanel />
         <SavePanel />
-        <EdgeStylePanel />
-        <LayoutPanel />
       </div>
     ),
   },
+  {
+    position: 'bottom-right',
+    content: (
+      <div style={{ display: 'flex', gap: 12 }}>
+        <ColorThemePanel />
+        {/* <EdgeStylePanel /> */}
+        <LayoutPanel />
+      </div>
+    ),
+  }
 ];

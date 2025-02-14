@@ -32,6 +32,8 @@ import { panels } from './panels';
 import { debounce, uniqueId } from 'lodash';
 import { HistoryRecord } from './history';
 import { NODE_HEIGHT } from './const';
+import { AIPanel } from './panels/ai/ai-generate';
+import { Switch } from 'antd';
 
 
 const LayoutFlow = () => {
@@ -41,6 +43,7 @@ const LayoutFlow = () => {
   const [edgeType, setEdgeTypeState] = React.useState<EdgeTypeEnum>(
     EdgeTypeEnum.Bezier,
   );
+  const [background, setBackground] = React.useState(true);
   const [selection, setSelection] = React.useState<OnSelectionChangeParams>({
     nodes: [],
     edges: [],
@@ -194,6 +197,8 @@ const LayoutFlow = () => {
     const contextValue: EditorContextValues = {
       selection,
       layout,
+      background,
+      setBackground,
       setLayout,
       updateLayout,
       insertChild: handleInsertChild,
@@ -207,7 +212,7 @@ const LayoutFlow = () => {
       },
     };
     return contextValue;
-  }, [reactFlow, layout, edgeType, selection]);
+  }, [reactFlow, layout, background, edgeType, selection]);
 
   const saveToHistory = useCallback(debounce((graphData: GraphData) => {
     console.log('Saved', new Date().toLocaleString(), graphData);
@@ -230,26 +235,39 @@ const LayoutFlow = () => {
   }, [history]);
   return (
     <EditorContext.Provider value={contextValues}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        fitView
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onBeforeDelete={handleDelete}
-        onSelectionChange={setSelection}
-        onInit={handleInit}
-      >
-        {panels.map(panel => (
-          <Panel position={panel.position} key={panel.position}>
-            {panel.content}
-          </Panel>
-        ))}
-        {/* <Background /> */}
-        <Controls showInteractive={true} />
-      </ReactFlow>
+
+    <div className="editor-container">
+      {/* <div className="editor-header">Header</div> */}
+      <div className="editor-content">
+        <div className="center-content">
+          <div className="main-content">
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
+              fitView
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onBeforeDelete={handleDelete}
+              onSelectionChange={setSelection}
+              onInit={handleInit}
+            >
+              {panels.map(panel => (
+                <Panel position={panel.position} key={panel.position}>
+                  {panel.content}
+                </Panel>
+              ))}
+              {background && <Background /> }
+              <Controls showInteractive={true} />
+            </ReactFlow>
+          </div>
+        </div>
+        <div className="right-bar">
+          <AIPanel />
+        </div>
+      </div>
+    </div>
     </EditorContext.Provider>
   );
 };

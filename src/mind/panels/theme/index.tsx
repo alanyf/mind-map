@@ -33,18 +33,17 @@ export function ColorThemePanel() {
     const edges = getEdges();
     const rootNode = graphToTree(getNodes(), edges);
     updateNodeData(rootNode.id, {
-      backgroundColor: theme.colors[0],
-      color: '#fff',
+      backgroundColor: theme.rootColor,
+      color: theme.textColor ?? '#000',
       border: 'none',
     });
-    const childrenColors = theme.colors.slice(1);
     rootNode.children?.forEach((node, index) => {
-      const colorIndex = index % childrenColors.length;
-      const color = childrenColors[colorIndex];
+      const colorIndex = index % theme.colors.length;
+      const color = theme.colors[colorIndex];
 
       updateNodeData(node.id, {
         backgroundColor: color,
-        color: '#fff',
+        color: theme.textColor ?? '#000',
         border: 'none',
       });
       const allChildren = getAllNodeChildren(node.id, edges);
@@ -81,7 +80,8 @@ export function ColorThemePanel() {
                 marginBottom: 8,
               }}
             >
-              {theme.colors.map(color => (
+              <div style={{ width: 50 }}>{theme.name}</div>
+              {[theme.rootColor, ...theme.colors].map(color => (
                 <div
                   key={color}
                   style={{

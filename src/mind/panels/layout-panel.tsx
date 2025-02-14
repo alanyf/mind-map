@@ -1,11 +1,11 @@
-import { Radio, Button } from 'antd';
+import { Radio, Button, Switch } from 'antd';
 import { Layout } from '../types';
 import { useEditor } from '../use-editor';
 
 export function LayoutPanel() {
-  const { layout, setLayout, updateLayout } = useEditor();
+  const { layout, setLayout, updateLayout, background, setBackground } = useEditor();
   return (
-    <div style={{ display: 'flex', gap: 4 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
       <Radio.Group
         value={layout}
         optionType="button"
@@ -26,6 +26,7 @@ export function LayoutPanel() {
       >
         自动布局
       </Button>
+      <Switch size="small" checked={background} onChange={setBackground} checkedChildren="bg" unCheckedChildren="bg" />
     </div>
   );
 }

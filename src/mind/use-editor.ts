@@ -13,6 +13,8 @@ export interface EditorContextValues {
   insertChild: (nodeID: string) => void;
   setData: (nodes: Node[], edges: Edge[]) => void;
   history: HistoryRecord;
+  background: boolean;
+  setBackground: (background: boolean) => void;
   computeLayout: (
     layout: Layout,
     nodes: Node[],
