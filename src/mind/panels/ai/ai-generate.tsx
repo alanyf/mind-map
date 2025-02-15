@@ -1,9 +1,9 @@
 /* eslint-disable no-console */
 import { Edge, Node, useReactFlow } from '@xyflow/react';
-import { Button, Input, Row, Tooltip } from 'antd';
+import { Button, Input, InputNumber, Row, Select, Tooltip } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { jsonrepair } from 'jsonrepair';
-import { cloneDeep, get, throttle } from 'lodash';
+import { cloneDeep, debounce, get, throttle } from 'lodash';
 import { graphToSimpleTree, safetyParseJSON, treeToGraph } from '../../utils';
 import { useEditor } from '../../use-editor';
 import { RespondingStatus, useLLMStreamCall } from '../../use-llm-stream-call';
@@ -18,24 +18,31 @@ const tips = (
   <MarkdownBox
     markdown={`
 AI使用说明(免费使用AI大模型攻略):
-1. **方法一**: 本地Ollama部署的模型名称, 请在Ollama中部署好模型后再使用。安装方法可参考：https://ollama.com;
+1. **方法一**: 本地Ollama部署的模型名称, 请在Ollama中部署好模型后再使用。安装方法可参考：https://ollama.com。设置环境变量可使Ollama服务允许跨域OLLAMA_ORIGINS="*"
 2. **方法二**: 硅基流动部分模型可以免费调用(如qwen2.5) 在官网 https://siliconflow.cn 注册登录后到【API密钥】菜单创建一个密钥填写在下方接口配置处即可免费使用;
 3. **方法三**: 本地API: 如果你是开发者, 可以调用本地服务的API来使用;
 `}
   />
 );
 
-
-const example = `生成一个初中物理知识的简易思维导图`;
+const saveMessagesDebounce = debounce((messages: Message[]) => {
+  localStorage.setItem('mind_map_messages', JSON.stringify(messages));
+}, 500);
 
 export function AIPanel() {
   const flow = useReactFlow();
   const { fitView } = flow;
   const { layout, selection, setData, computeLayout } = useEditor();
   const [visible, setVisible] = useState(localStorage.getItem('mind_map_open_ai_panel') === 'true');
-  const [query, setQuery] = useState(example);
-  const [regenerate, setRegenerate] = useState(true);
-  const [messages, setMessages] = useState<Message[]>([{ role: 'assistant', content: '让我们一起来制作一个思维导图吧' }]);
+  const [query, setQuery] = useState('生成一个初中物理知识的简易思维导图');
+  const [historyMsgCtxCount, setHistoryMsgCtxCount] = useState<number>(0);
+  const [panelWidth, setPanelWidth] = useState<number | string>(400);
+  const [loadingMessage, setLoadingMessage] = useState<Message | undefined>();
+  const [messages, setMessages] = useState<Message[]>(
+    safetyParseJSON(localStorage.getItem('mind_map_messages') ?? '') ?? [
+      { role: 'assistant', content: '让我们一起来制作一个思维导图吧' },
+    ],
+  );
   const [mode, setMode] = useState<'generate' | 'expand'>('generate');
   const [apiConfig, setApiConfig] = useState<LLMApiConfig>(
     safetyParseJSON(localStorage.getItem('mind_map_api_config') ?? '') ?? {
@@ -96,24 +103,32 @@ export function AIPanel() {
     }
   }, 200);
 
+  const handleSetMessages = (messages: Message[] | ((messages: Message[]) => Message[])) => {
+    setMessages((oldState) => {
+      const newMessages = typeof messages === 'function' ? messages(oldState) : messages;
+      saveMessagesDebounce(newMessages);
+      return newMessages;
+    });
+  };
 
   const handleGenerate = () => {
-    const treeData = graphToSimpleTree(flow.getNodes(), flow.getEdges());
     setMode('generate');
-    const systemPrompt = getSystemPrompt({ beauty: true, query, rootNode: regenerate ? undefined : treeData });
-    const queryStr = `现在开始，用户的输入为：${query}\n你的输出: `;
+    const systemPrompt = getSystemPrompt({ beauty: true, query });
+    const queryStr = `输入：${query}\n你的输出: `;
 
+    const count = historyMsgCtxCount || 0;
     aiLLMCall.start(
       getLLMCallParams(apiConfig)({
         prompt: `${systemPrompt}\n${queryStr}`,
         messages: [
-          { role: 'assistant', content: systemPrompt },
+          { role: 'system', content: systemPrompt },
+          ...messages.slice(messages.length - count, messages.length),
           { role: 'user', content: queryStr },
         ],
       }),
     );
-    setMessages((oldState) => [
-      ...oldState.slice(0, 1),
+    handleSetMessages((oldState) => [
+      ...oldState,
       { role: 'user', content: query },
     ]);
     setQuery('');
@@ -136,18 +151,20 @@ export function AIPanel() {
       node: { label: selectedNodeRef.current?.data?.label as string ?? '', id: selectedNodeRef.current?.id ?? '' },
       rootNode,
     });
-    const queryStr = query ? `现在开始，用户的输入为：${query}\n你的输出: ` : '';
+    const queryStr = query ? `输入：${query}\n你的输出: ` : '';
+    const count = historyMsgCtxCount || 0;
     expandLLMCall.start(
       getLLMCallParams(apiConfig)({
         prompt: `${systemPrompt}\n${queryStr}`,
         messages: [
-          { role: 'assistant', content: systemPrompt },
+          { role: 'system', content: systemPrompt },
+          ...messages.slice(messages.length - count, messages.length),
           { role: 'user', content: queryStr },
         ],
       }),
     );
-    setMessages((oldState) => [
-      ...oldState.slice(0, 1),
+    handleSetMessages((oldState) => [
+      ...oldState,
       { role: 'user', content: query || '扩写选中节点' },
     ]);
     setQuery('');
@@ -162,13 +179,10 @@ export function AIPanel() {
     const result = aiLLMCall.smoothExecuteResult;
     if (result) {
       const isJson = !result.includes('```json') && result.trim().startsWith('{');
-      setMessages((oldState) => [
-        ...oldState.slice(0, 2),
-        {
-          role: 'assistant',
-          content: !isJson ? result : `\`\`\`json\n${result}\n\`\`\``,
-        },
-      ]);
+      setLoadingMessage({
+        role: 'assistant',
+        content: !isJson ? result : `\`\`\`json\n${result}\n\`\`\``,
+      });
     }
     const json = getJsonDataFromMarkdown(result);
     if (!json?.trim()) {
@@ -182,13 +196,10 @@ export function AIPanel() {
     const result = expandLLMCall.smoothExecuteResult;
     if (result) {
       const isJson = !result.includes('```json') && result.trim().startsWith('{');
-      setMessages((oldState) => [
-        ...oldState.slice(0, 2),
-        {
-          role: 'assistant',
-          content: !isJson ? result : `\`\`\`json\n${result}\n\`\`\``,
-        },
-      ]);
+      setLoadingMessage({
+        role: 'assistant',
+        content: !isJson ? result : `\`\`\`json\n${result}\n\`\`\``,
+      });
     }
     const json = getJsonDataFromMarkdown(result);
     if (!json?.trim()) {
@@ -200,11 +211,27 @@ export function AIPanel() {
 
   useEffect(() => {
     if (aiLLMCall.respondingStatus === RespondingStatus.End) {
+      handleSetMessages((oldState) => [
+       ...oldState,
+       ...(loadingMessage ? [loadingMessage] : []),
+      ]);
+      setLoadingMessage(undefined);
       setTimeout(() => {
         fitView();
       }, 200);
     }
-  }, [aiLLMCall.smoothExecuteResult]);
+  }, [aiLLMCall.respondingStatus]);
+
+  useEffect(() => {
+    if (expandLLMCall.respondingStatus === RespondingStatus.End) {
+      handleSetMessages((oldState) => [
+       ...oldState,
+       ...(loadingMessage ? [loadingMessage] : []),
+      ]);
+      setLoadingMessage(undefined);
+      setTimeout(() => fitView(), 200);
+    }
+  }, [expandLLMCall.respondingStatus]);
   if (!visible) {
     return <div style={{ width: 0, position: 'relative'}}>
       <MagicAIAction visible={visible} setVisible={handleOpenAIPanel} />
@@ -212,7 +239,7 @@ export function AIPanel() {
   }
   return (
     <div style={{
-      height: '100%', width: 460,
+      height: '100%', width: panelWidth,
       display: 'flex', flexDirection: 'column',
       position: 'relative',
     }}>
@@ -234,6 +261,19 @@ export function AIPanel() {
             <InfoCircleFilled /> 使用说明
           </div>
         </Tooltip>
+        <Select
+          style={{ width: 80, marginLeft: 'auto'  }}
+          size="small"
+          options={[
+            { label: '很小', value: 300 },
+            { label: '小', value: 400 },
+            { label: '中', value: 640 },
+            { label: '大', value: 800 },
+            { label: '超大', value: 980 },
+          ]}
+          value={panelWidth}
+          onChange={val => setPanelWidth(val)}
+        />
       </div>
       <div style={{
         overflow: 'hidden',
@@ -248,7 +288,11 @@ export function AIPanel() {
         }}>
           <ChatMessages
             messages={messages}
+            onMessageChange={handleSetMessages}
           />
+          {loadingMessage && <ChatMessages
+            messages={[loadingMessage]}
+          />}
         </div>
         <APiConfigFormCollapse
           values={apiConfig}
@@ -285,12 +329,23 @@ export function AIPanel() {
           }}>
             停止
           </Button>
-          {/* <Checkbox
-            checked={regenerate}
-            onChange={e => setRegenerate(e.target.checked)}
-          >
-            重新生成
-          </Checkbox> */}
+          <Button onClick={() => {
+            handleSetMessages([]);
+          }}>
+            清空
+          </Button>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+            <Tooltip title="历史消息上下文数量，默认为0。为0即不携带任何历史对话信息">
+              <InputNumber
+                size="small"
+                placeholder="历史消息数"
+                max={10}
+                min={0}
+                value={historyMsgCtxCount}
+                onChange={(val) => setHistoryMsgCtxCount(Number(val) || 0)}
+              />
+            </Tooltip>
+          </div>
         </Row>
       </div>
     </div>

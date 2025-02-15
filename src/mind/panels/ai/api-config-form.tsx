@@ -48,7 +48,7 @@ export function getLLMCallParams(llmApiConfig: LLMApiConfig): (params: LLMCallPa
       temperature = 0.1,
       topP = 0.9,
     }: LLMCallParams) => ({
-      url: `${config.host || 'http://localhost:11434'}/api/generate`,
+      url: `${config.host || 'http://localhost:11434'}/api/chat`,
       method: 'POST',
       body: JSON.stringify({
         prompt,
@@ -268,11 +268,11 @@ export function APiConfigFormCollapse({
 }) {
   const [form] = Form.useForm();
   const setConfig = (
-    <div onClick={e => e.stopPropagation()} style={{ marginLeft: 20, display: 'inline-block' }}>
-      快捷配置：
+    <div onClick={e => e.stopPropagation()} style={{ marginLeft: 12, display: 'inline-block' }}>
+      平台：
       <Select<string, { label: string; value: string; apiConfig: LLMApiConfig }>
         size="small"
-        style={{ width: 120 }}
+        style={{ width: 100 }}
         value={values?.provider ?? LLMProviderType.CUSTOM}
         onChange={(val, option) => {
           if (!Array.isArray(option)) {
@@ -296,7 +296,7 @@ export function APiConfigFormCollapse({
       labelCol={{ span: 6 }}
     >
       <Collapse>
-        <Collapse.Panel header={<>更多配置(模型 / 接口) {setConfig}</>} key="1">
+        <Collapse.Panel header={<>模型/接口配置 {setConfig}</>} key="1">
           {values?.provider === LLMProviderType.OLLAMA && (
             <OllamaApiConfigForm />
           )}

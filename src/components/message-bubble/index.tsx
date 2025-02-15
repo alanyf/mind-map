@@ -1,4 +1,4 @@
-import { UserOutlined, OpenAIOutlined, CopyFilled, DownOutlined } from '@ant-design/icons';
+import { UserOutlined, OpenAIOutlined, CopyFilled, DownOutlined, DeleteFilled } from '@ant-design/icons';
 /* eslint-disable react/no-danger */
 import React from 'react';
 import { MarkdownBox } from '../markdown-box';
@@ -9,12 +9,14 @@ function Bubble({
   avatar,
   position = 'left',
   contentStyle = {},
+  onDelete,
 }: {
   content?: string;
   avatar?: { icon?: React.ReactNode; src?: string };
   typing?: boolean;
   position?: 'left' | 'right';
   contentStyle?: React.CSSProperties;
+  onDelete?: () => void;
 }){
   const [renderMode, setRenderMode] = React.useState<'md' | 'txt'>('md');
   const avatarJsx = (
@@ -65,6 +67,10 @@ function Bubble({
                 });
               }}
             />
+            <DeleteFilled
+              style={{ cursor: 'pointer', color: '#888' }}
+              onClick={() => onDelete?.()}
+            />
             <Dropdown
               mouseEnterDelay={0}
               overlay={
@@ -92,7 +98,7 @@ function Bubble({
   );
 }
 
-export function MessageBubble({ role, content }: { role?: string; content: string }) {
+export function MessageBubble({ role, content, onDelete }: { role?: string; content: string; onDelete?: () => void  }) {
   return (
     <Bubble
       typing
@@ -102,6 +108,7 @@ export function MessageBubble({ role, content }: { role?: string; content: strin
       contentStyle={{
         backgroundColor: role === 'assistant' ? '#f0f0f0' : '#e9f4fe',
       }}
+      onDelete={onDelete}
     />
   );
 };
@@ -111,8 +118,9 @@ export interface Message {
   content: string;
 }
 export function ChatMessages({
-  messages = []
-}: { messages: Message[] }) {
+  messages = [],
+  onMessageChange,
+}: { messages: Message[]; onMessageChange?: (messages: Message[]) => void }) {
   return (
     <div style={{
       overflow: 'hidden',
@@ -123,6 +131,11 @@ export function ChatMessages({
           <MessageBubble
             role={message.role}
             content={message.content}
+            onDelete={() => {
+              const newMessages = [...messages];
+              newMessages.splice(index, 1);
+              onMessageChange?.(newMessages);
+            }}
           />
           <div style={{ height: 12 }} />
         </React.Fragment>

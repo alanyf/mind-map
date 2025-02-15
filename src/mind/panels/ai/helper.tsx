@@ -116,7 +116,7 @@ export function extractResponseFromChunk(chunk: string, responsePath?: string): 
 }
 
 export function extractContentFromOllamaChunk(chunk: string): string {
-  const response = extractResponseFromChunk(chunk, 'response');
+  const response = extractResponseFromChunk(chunk, 'message.content');
   return response;
 }
 
